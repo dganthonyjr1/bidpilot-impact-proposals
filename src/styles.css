@@ -1,0 +1,173 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Bidpilot — Sudden Impact Agency brand system
+ * Pure-black canvas, hot-pink primary CTA (#EC4899),
+ * signature pink → purple → cyan gradient for headlines & accents.
+ * Matches suddenimpactagency.io exactly.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+:root {
+  /* Dark by default — Bidpilot is dark-first */
+  --radius: 0.5rem;
+  --background: oklch(0 0 0);                   /* pure black — Sudden Impact Agency */
+  --foreground: oklch(0.98 0 0);                /* near-white */
+  --card: oklch(0.09 0 0);                      /* #161616 */
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.09 0 0);
+  --popover-foreground: oklch(0.98 0 0);
+  --primary: oklch(0.55 0.24 285);              /* deep violet #7C3AED — gradient anchor */
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.14 0 0);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.14 0 0);
+  --muted-foreground: oklch(0.82 0 0);
+  --accent: oklch(0.22 0.08 285);               /* deep violet-tinted surface */
+  --accent-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.70 0.18 145);              /* savings green */
+  --success-foreground: oklch(0.05 0 0);
+  --warning: oklch(0.80 0.18 85);
+  --border: oklch(0.18 0 0);
+  --input: oklch(0.14 0 0);
+  --ring: oklch(0.55 0.24 285);
+  --chart-1: oklch(0.55 0.24 285);                /* violet */
+  --chart-2: oklch(0.70 0.18 145);
+  --chart-3: oklch(0.72 0.16 210);                /* SIA cyan */
+  --chart-4: oklch(0.62 0.20 260);                /* indigo */
+  --chart-5: oklch(0.72 0.16 210);                /* cyan */
+  --sidebar: oklch(0.07 0 0);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.55 0.24 285);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.14 0 0);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(0.18 0 0);
+  --sidebar-ring: oklch(0.55 0.24 285);
+
+  /* Brand gradients & effects */
+  /* Bidpilot signature gradient: violet → indigo → cyan (no pink) */
+  --gradient-sia: linear-gradient(90deg, #7C3AED 0%, #6366F1 50%, #22D3EE 100%);
+  --gradient-primary: var(--gradient-sia);
+  --gradient-hero: radial-gradient(circle at 12% 12%, oklch(0.50 0.24 285 / 0.28), transparent 55%), radial-gradient(circle at 88% 82%, oklch(0.55 0.20 210 / 0.22), transparent 55%), radial-gradient(circle at 50% 50%, oklch(0.45 0.22 260 / 0.18), transparent 60%);
+  --shadow-glow: 0 0 50px oklch(0.55 0.24 285 / 0.45);
+  --shadow-glow-sia: 0 0 60px rgba(124, 58, 237, 0.45);
+  --shadow-card: 0 1px 0 oklch(1 0 0 / 0.05) inset, 0 10px 30px -10px oklch(0 0 0 / 0.5);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    font-weight: 500;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+
+  .font-mono { font-family: var(--font-mono); }
+}
+
+@layer base {
+  p, li, label, a, span, button, input, textarea, select { font-weight: 500; }
+  .text-muted-foreground { font-weight: 500; }
+}
+
+@layer utilities {
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, oklch(1 0 0 / 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(1 0 0 / 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .bg-hero { background-image: var(--gradient-hero); }
+  .text-gradient-primary {
+    background-image: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-sia {
+    background-image: var(--gradient-sia);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-gradient-sia { background-image: var(--gradient-sia); }
+  /* Apply the SIA gradient to every primary button automatically */
+  .bg-primary {
+    background-image: var(--gradient-sia);
+    background-size: 200% 100%;
+    background-position: 0% 50%;
+    transition: background-position 400ms ease, box-shadow 200ms ease, filter 200ms ease;
+  }
+  .bg-primary:hover { background-position: 100% 50%; filter: brightness(1.08); }
+  .shadow-glow { box-shadow: var(--shadow-glow); }
+  .shadow-card { box-shadow: var(--shadow-card); }
+  .ring-brand { box-shadow: 0 0 0 1px var(--primary); }
+}
