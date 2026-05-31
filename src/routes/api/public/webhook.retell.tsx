@@ -5,7 +5,7 @@ import * as React from "react";
 import { render } from "@react-email/components";
 import { TEMPLATES } from "@/lib/email-templates/registry";
 import { computeTotals, fmt, type MaterialLine, type LaborLine } from "@/lib/pricing";
-import { sendSmsViaGHL } from "@/lib/ghl.server";
+import { sendEmailViaGHL, sendSmsViaGHL } from "@/lib/ghl.server";
 import { callClaudeForEstimate, generateEstimateNumber } from "@/lib/estimates.server";
 
 const EMAIL_SITE_NAME = "Bidpilot";
@@ -18,11 +18,13 @@ function genToken() {
   return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-async function enqueueProposalEmail(opts: {
+async function sendProposalEmail(opts: {
   to: string;
   proposal: any;
   contractor: { business_name: string | null } | null;
   proposalUrl: string;
+  contactName?: string | null;
+  contactPhone?: string | null;
 }) {
   const normalized = opts.to.toLowerCase().trim();
   const { data: suppressed } = await supabaseAdmin
@@ -62,6 +64,24 @@ async function enqueueProposalEmail(opts: {
   const text = await render(element, { plainText: true });
   const subject = typeof tpl.subject === "function" ? tpl.subject(templateData) : tpl.subject;
 
+  const ghlResult = await sendEmailViaGHL({
+    to: normalized,
+    subject,
+    html,
+    text,
+    contactName: opts.contactName || opts.proposal.client_name,
+    contactPhone: opts.contactPhone || opts.proposal.client_phone,
+  });
+  if (ghlResult.ok) {
+    await supabaseAdmin.from("email_send_log").insert({
+      message_id: ghlResult.messageId || crypto.randomUUID(),
+      template_name: "proposal-ready",
+      recipient_email: normalized,
+      status: "sent",
+    });
+    return { provider: "ghl", ...ghlResult };
+  }
+
   const messageId = crypto.randomUUID();
   await supabaseAdmin.from("email_send_log").insert({
     message_id: messageId, template_name: "proposal-ready",
@@ -82,8 +102,8 @@ async function enqueueProposalEmail(opts: {
       queued_at: new Date().toISOString(),
     },
   });
-  if (error) return { error: error.message };
-  return { queued: true, message_id: messageId };
+  if (error) return { provider: "queue", error: error.message, ghl_error: ghlResult.error };
+  return { provider: "queue", queued: true, message_id: messageId, ghl_error: ghlResult.error };
 }
 
 type MaterialRow = {
@@ -376,23 +396,26 @@ export const Route = createFileRoute("/api/public/webhook/retell")({
           .single();
         if (error) return new Response(error.message, { status: 500 });
 
-        // Build public proposal URL and notify contractor
+        // Build public proposal URL and notify the client
         const origin = `${url.protocol}//${url.host}`;
         const proposalUrl = `${origin}/p/${created.id}`;
 
-        // Email the contractor with the new proposal (via queue + branded template)
+        // Email the client (if we captured an email) with the proposal link.
+        // Prefer GoHighLevel email when configured; fall back to the existing queued sender.
         let emailResult: any = null;
-        if (contractor.email) {
+        if (job.client_email) {
           try {
             const { data: full } = await supabaseAdmin.from("proposals").select("*").eq("id", created.id).single();
-            emailResult = await enqueueProposalEmail({
-              to: contractor.email,
+            emailResult = await sendProposalEmail({
+              to: job.client_email,
               proposal: full,
               contractor: { business_name: contractor.business_name },
               proposalUrl,
+              contactName: job.client_name,
+              contactPhone: job.client_phone,
             });
           } catch (e) {
-            console.warn("[retell webhook] email enqueue failed:", (e as Error).message);
+            console.warn("[retell webhook] client email send failed:", (e as Error).message);
             emailResult = { error: (e as Error).message };
           }
         }
@@ -404,6 +427,8 @@ export const Route = createFileRoute("/api/public/webhook/retell")({
             smsResult = await sendSmsViaGHL({
               to: job.client_phone,
               body: `${contractor.business_name}: Your proposal ${created.proposal_number} is ready. View: ${proposalUrl}`,
+              contactName: job.client_name,
+              contactEmail: job.client_email || undefined,
             });
           } catch (e) {
             console.warn("[retell webhook] sms send failed:", (e as Error).message);
