@@ -149,12 +149,12 @@ export async function sendEmailViaGHL(opts: {
   contactPhone?: string | null;
 }): Promise<GhlEmailResult> {
   const token = process.env.GHL_API_TOKEN;
-  const fromEmail = opts.fromEmail || process.env.GHL_EMAIL_FROM || process.env.GHL_FROM_EMAIL;
+  const fromEmail = opts.fromEmail || process.env.GHL_EMAIL_FROM || process.env.GHL_FROM_EMAIL || "noreply@suddenimpactagency.io";
 
   if (!token || !process.env.GHL_LOCATION_ID || !fromEmail) {
     return {
       ok: false,
-      error: "GHL email not configured (missing GHL_API_TOKEN/GHL_LOCATION_ID/GHL_EMAIL_FROM)",
+      error: "GHL email not configured (missing GHL_API_TOKEN/GHL_LOCATION_ID)",
     };
   }
 

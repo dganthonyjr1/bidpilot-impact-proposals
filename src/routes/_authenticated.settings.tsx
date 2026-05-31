@@ -40,7 +40,7 @@ function SettingsPage() {
       license_number: contractor.license_number,
       trade_type: contractor.trade_type,
       primary_color: contractor.primary_color,
-      anthropic_api_key: contractor.anthropic_api_key,
+      anthropic_api_key: contractor.anthropic_api_key?.trim() || null,
       logo_url: contractor.logo_url,
       slug: contractor.slug || null,
       business_address: contractor.business_address || null,

@@ -244,3 +244,35 @@ Current dashboard state for project `uxejkjtuipdtzeleodzz`: the Auth Emails → 
 The Retell voice AI proposal webhook was updated so generated proposal links are delivered to the **client** by both channels when the call analysis includes contact details: SMS is sent through GoHighLevel using the existing `sendSmsViaGHL` helper, and email now prefers GoHighLevel Conversations email through a new `sendEmailViaGHL` helper with fallback to the existing Supabase transactional email queue if GHL email is not configured or the send fails. Previously, the proposal branch emailed the contractor address while texting the client, which did not satisfy the requested client email delivery behavior.
 
 A local production build with `pnpm build` completed successfully after the update. Non-blocking module directive warnings from dependency packages were still present, matching prior deployments, but the build completed and generated the Vercel output successfully.
+
+
+### Deployment monitoring
+
+The messaging update commit `a91bcca` was pushed to `main` and Vercel started a production deployment titled **Send Retell proposal emails to clients via GHL**. The deployment progressed from queued to building while monitoring the Vercel deployments page.
+
+
+### Live delivery test after messaging deployment
+
+The approved production Retell-style proposal delivery test was triggered for `donganthonyjr@gmail.com` and `+18562001869`, but it could not proceed to SMS/email sending because the production server returned `Contractor not found` for the previously used contractor ID. A follow-up call to the structured `/api/public/test-proposal-flow` endpoint returned a more specific Supabase error from project `uxejkjtuipdtzeleodzz`: `PGRST205` / `Could not find the table 'public.contractors' in the schema cache`. The authenticated production Settings page also remained stuck at `Loading...`, consistent with the frontend being unable to read `public.contractors`.
+
+Conclusion: the Retell/GHL messaging code is deployed, but the live proposal flow is currently blocked earlier by missing production database schema tables (`contractors`, and likely related proposal/material/email infrastructure tables). The next safe fix is to apply the repository's Supabase migrations to production, then retest delivery. This is a production database change and should be treated as a sensitive operation requiring explicit confirmation before execution.
+
+
+## Production stabilization - schema inspection (2026-05-31)
+
+Confirmed through the Supabase SQL editor on project `uxejkjtuipdtzeleodzz` that none of the target application tables currently exist in the production `public` schema. The read-only inspection query returned `0 rows` for `contractors`, `materials`, `proposals`, `proposal_acceptances`, `materials_orders`, `proposal_views`, `email_send_log`, `email_unsubscribe_tokens`, `suppressed_emails`, and `estimates`. This confirms the live production failures are due to unapplied database migrations, not only messaging code.
+
+
+### Production stabilization - migration editor load
+
+The prepared production migration batch was loaded into the authenticated Supabase SQL editor via the browser session. The loaded batch length was 61,649 bytes and begins with the generated migration header, ending with `commit;`. This followed the prior read-only schema inspection showing the required application tables were absent.
+
+
+### Production stabilization - migration execution
+
+The confirmed production migration batch was executed in the Supabase SQL editor for project `uxejkjtuipdtzeleodzz`. Supabase returned `Success. No rows returned`, indicating the schema migration transaction completed without a visible SQL error. Next steps are to verify the required tables are accessible from the production app and confirm contractor/profile backfill behavior.
+
+
+### Production stabilization - contractor settings verification
+
+After the database migration, the production account `donganthonyjr@gmail.com` successfully signed in and the Settings page loaded instead of staying stuck on `Loading...`. The page displays contractor profile fields for business name `Don Anthony`, trade type `General Contractor`, email `donganthonyjr@gmail.com`, and a Retell webhook URL containing contractor ID `990c1ae6-b97a-44b8-a84f-283aeeaccbb6`. This confirms the missing `public.contractors` table/schema issue is resolved for the logged-in production account.

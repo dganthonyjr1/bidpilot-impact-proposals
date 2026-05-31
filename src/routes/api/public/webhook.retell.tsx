@@ -7,6 +7,7 @@ import { TEMPLATES } from "@/lib/email-templates/registry";
 import { computeTotals, fmt, type MaterialLine, type LaborLine } from "@/lib/pricing";
 import { sendEmailViaGHL, sendSmsViaGHL } from "@/lib/ghl.server";
 import { callClaudeForEstimate, generateEstimateNumber } from "@/lib/estimates.server";
+import { sendLovableEmail } from "@lovable.dev/email-js";
 
 const EMAIL_SITE_NAME = "Bidpilot";
 const EMAIL_SENDER_DOMAIN = "notify.suddenimpactagency.io";
@@ -82,6 +83,42 @@ async function sendProposalEmail(opts: {
     return { provider: "ghl", ...ghlResult };
   }
 
+  let directEmailError: string | null = null;
+  const lovableApiKey = process.env.LOVABLE_API_KEY;
+  if (lovableApiKey) {
+    const directMessageId = crypto.randomUUID();
+    try {
+      await sendLovableEmail(
+        {
+          to: normalized,
+          from: `${EMAIL_SITE_NAME} <noreply@${EMAIL_FROM_DOMAIN}>`,
+          sender_domain: EMAIL_SENDER_DOMAIN,
+          subject,
+          html,
+          text,
+          purpose: "transactional",
+          label: "proposal-ready",
+          idempotency_key: `retell-proposal-${opts.proposal.id}-${normalized}`,
+          unsubscribe_token: unsubToken,
+          message_id: directMessageId,
+        },
+        { apiKey: lovableApiKey, sendUrl: process.env.LOVABLE_SEND_URL }
+      );
+      await supabaseAdmin.from("email_send_log").insert({
+        message_id: directMessageId,
+        template_name: "proposal-ready",
+        recipient_email: normalized,
+        status: "sent",
+      });
+      return { provider: "lovable_direct", ok: true, message_id: directMessageId, ghl_error: ghlResult.error };
+    } catch (e) {
+      directEmailError = (e as Error).message;
+      console.warn("[retell webhook] direct proposal email send failed:", directEmailError);
+    }
+  } else {
+    directEmailError = "LOVABLE_API_KEY is not configured";
+  }
+
   const messageId = crypto.randomUUID();
   await supabaseAdmin.from("email_send_log").insert({
     message_id: messageId, template_name: "proposal-ready",
@@ -102,8 +139,8 @@ async function sendProposalEmail(opts: {
       queued_at: new Date().toISOString(),
     },
   });
-  if (error) return { provider: "queue", error: error.message, ghl_error: ghlResult.error };
-  return { provider: "queue", queued: true, message_id: messageId, ghl_error: ghlResult.error };
+  if (error) return { provider: "queue", error: error.message, ghl_error: ghlResult.error, direct_error: directEmailError };
+  return { provider: "queue", queued: true, message_id: messageId, ghl_error: ghlResult.error, direct_error: directEmailError };
 }
 
 type MaterialRow = {
@@ -121,6 +158,50 @@ type AIShape = {
   labor: { task: string; description?: string; hours: number; rate: number }[];
   tiers: { good: { label: string; description: string }; better: { label: string; description: string }; best: { label: string; description: string } };
 };
+
+function buildFallbackProposal(opts: {
+  contractor: { business_name: string; trade_type: string | null };
+  job: {
+    client_name: string; job_address: string | null; job_city: string | null;
+    job_state: string | null; trade_type: string | null; job_description: string; job_scope: string | null;
+  };
+  catalog: MaterialRow[];
+}): AIShape {
+  const trade = (opts.job.trade_type || opts.contractor.trade_type || "general contracting").toString();
+  const usableCatalog = (opts.catalog || []).slice(0, 6);
+  const materials = usableCatalog.length
+    ? usableCatalog.slice(0, 4).map((m) => ({
+        catalog_id: m.id,
+        item: m.name,
+        description: m.description || `${m.category} material for ${trade} work`,
+        qty: 1,
+        unit: m.unit || "each",
+        retail_price: Number(m.retail_price) || 0,
+        sia_price: m.sia_price ?? null,
+      }))
+    : [
+        { item: "Project materials allowance", description: "Allowance for standard materials, supplies, fasteners, and consumables", qty: 1, unit: "allowance", retail_price: 1250, sia_price: 1000 },
+        { item: "Site protection and cleanup supplies", description: "Protection, disposal bags, cleanup, and jobsite consumables", qty: 1, unit: "allowance", retail_price: 300, sia_price: 240 },
+      ];
+
+  return {
+    scope_of_work: `Prepare, coordinate, and complete the requested ${trade} work for ${opts.job.client_name}. Scope is based on the voice intake details: ${opts.job.job_scope || opts.job.job_description}. Final quantities, selections, and site conditions should be confirmed before work begins.`,
+    timeline: "Estimated 3-7 business days after material selections and scheduling are confirmed.",
+    warranty: "1-year workmanship warranty, excluding owner-supplied materials, pre-existing conditions, and normal wear.",
+    exclusions: ["Permit fees unless explicitly listed", "Hidden damage or structural repairs not visible during intake", "Changes in material selections or scope after approval"],
+    materials,
+    labor: [
+      { task: "Project setup and protection", description: "Mobilization, layout, protection, and preparation", hours: 4, rate: 85 },
+      { task: `${trade} installation labor`, description: "Complete labor for the requested scope", hours: 16, rate: 95 },
+      { task: "Cleanup and final walkthrough", description: "Debris removal, cleanup, and punch-list review", hours: 3, rate: 85 },
+    ],
+    tiers: {
+      good: { label: "Good", description: "Essential scope with standard materials and finish quality" },
+      better: { label: "Better", description: "Recommended scope with upgraded details and balanced value" },
+      best: { label: "Best", description: "Premium finish level with enhanced materials and added detail" },
+    },
+  };
+}
 
 async function callClaude(opts: {
   apiKey: string;
@@ -358,9 +439,11 @@ export const Route = createFileRoute("/api/public/webhook/retell")({
           } catch (e: any) {
             aiError = e?.message || "AI generation failed";
             console.error("[retell webhook] Claude error:", aiError);
+            ai = buildFallbackProposal({ contractor, job, catalog });
           }
         } else {
           aiError = "No Anthropic API key configured (contractor or global)";
+          ai = buildFallbackProposal({ contractor, job, catalog });
         }
 
         const validThrough = new Date();
