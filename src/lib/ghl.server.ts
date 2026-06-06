@@ -42,6 +42,24 @@ function clean(value?: string | null) {
 }
 
 function resolveGhlConfig(credentials?: GhlCredentials | null): GhlRuntimeConfig | null {
+  const platformToken = clean(process.env.GHL_API_TOKEN);
+  const platformLocationId = clean(process.env.GHL_LOCATION_ID);
+
+  // Production emergency safety: prefer the centrally managed Vercel token when
+  // it is present. Contractor rows can contain stale private-integration tokens,
+  // while the environment token can be rotated immediately without direct DB
+  // access. If no platform token is configured, fall back to contractor-owned
+  // credentials as before.
+  if (platformToken && platformLocationId) {
+    return {
+      token: platformToken,
+      locationId: platformLocationId,
+      fromNumber: clean(process.env.GHL_FROM_NUMBER) || clean(credentials?.fromNumber) || undefined,
+      fromEmail: clean(process.env.GHL_EMAIL_FROM) || clean(process.env.GHL_FROM_EMAIL) || clean(credentials?.fromEmail) || undefined,
+      source: "platform",
+    };
+  }
+
   const contractorToken = clean(credentials?.apiToken);
   const contractorLocationId = clean(credentials?.locationId);
 
@@ -55,17 +73,7 @@ function resolveGhlConfig(credentials?: GhlCredentials | null): GhlRuntimeConfig
     };
   }
 
-  const token = clean(process.env.GHL_API_TOKEN);
-  const locationId = clean(process.env.GHL_LOCATION_ID);
-  if (!token || !locationId) return null;
-
-  return {
-    token,
-    locationId,
-    fromNumber: clean(process.env.GHL_FROM_NUMBER) || undefined,
-    fromEmail: clean(process.env.GHL_EMAIL_FROM) || clean(process.env.GHL_FROM_EMAIL) || undefined,
-    source: "platform",
-  };
+  return null;
 }
 
 function ghlHeaders(token: string) {
@@ -135,10 +143,10 @@ async function upsertGhlContact(input: GhlContactInput): Promise<GhlContactResul
 }
 
 /**
- * Send an SMS via GoHighLevel's Conversations API. If contractor-owned GHL
- * credentials are supplied, the contact and message are created in that
- * contractor's sub-account; otherwise the platform-level GHL configuration is
- * used as a backward-compatible fallback.
+ * Send an SMS via GoHighLevel's Conversations API. Production first uses the
+ * centrally managed GHL environment token when configured, allowing an invalid
+ * contractor token to be rotated immediately. If the environment token is not
+ * present, contractor-owned credentials are used as a fallback.
  */
 export async function sendSmsViaGHL(opts: {
   to: string;
@@ -207,9 +215,10 @@ export async function sendSmsViaGHL(opts: {
 }
 
 /**
- * Send an email via GoHighLevel's Conversations API. Contractor-owned GHL
- * credentials and sender addresses are preferred when supplied; platform-level
- * delivery remains available as a fallback for existing deployments.
+ * Send an email via GoHighLevel's Conversations API. Production first uses the
+ * centrally managed GHL environment token when configured, allowing an invalid
+ * contractor token to be rotated immediately. If the environment token is not
+ * present, contractor-owned credentials are used as a fallback.
  */
 export async function sendEmailViaGHL(opts: {
   to: string;
